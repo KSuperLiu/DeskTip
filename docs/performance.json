@@ -1,0 +1,11 @@
+﻿{
+    "measuredAt":  "2026-10-14T10:29:07.6575958+08:00",
+    "scenario":  "fresh background start, no settings window, no reminder popup",
+    "elapsedSeconds":  45.02,
+    "cpuSeconds":  0,
+    "cpuPercentOfOneCore":  0,
+    "workingSetMB":  65.57,
+    "privateMemoryMB":  14.53,
+    "handles":  346,
+    "runtime":  "Windows x64, WPF .NET 8 self-contained Release"
+}
