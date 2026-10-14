@@ -1,143 +1,160 @@
-using System.Collections.ObjectModel;
-using System.Text.Json;
-using System.Windows.Input;
-using System.Windows.Media.Imaging;
 using DeskTip.Core;
 using DeskTip.Services;
 using Microsoft.Win32;
+using System.Text.Json;
+using System.Windows.Input;
+
 namespace DeskTip;
 
 public partial class MainWindow : Window
 {
     private readonly ReminderService service;
-    private ObservableCollection<WorkPeriod> periods = new();
-    private ObservableCollection<ReminderRule> rules = new();
-    private CalendarData calendar = new();
+    private CalendarData calendar;
+    private string category = "全部";
+    private bool ready;
     private int page;
+    private string lastUiSignature = "";
     public MainWindow(ReminderService service)
     {
-        this.service = service; InitializeComponent();
-        HeroPet.Source = AssetService.Pet;
-        LoadEditors(); SelectPage(0); Refresh();
-        service.Changed += Refresh;
-        Closed += (_, _) => service.Changed -= Refresh;
+        this.service = service; calendar = SettingsStore.Clone(service.Settings).Calendar;
+        InitializeComponent(); Width = Math.Min(1260, SystemParameters.WorkArea.Width - 30); Height = Math.Min(850, SystemParameters.WorkArea.Height - 30);
+        HeroImage.Source = AssetService.Pet; ready = true; LoadPreferences(); SelectPage(0); Refresh();
+        if (SettingsStore.LoadWarning != null) Feedback.Text = SettingsStore.LoadWarning;
+        service.Changed += Refresh; Closed += (_, _) => service.Changed -= Refresh;
         KeyDown += (_, e) => { if (e.Key == Key.Escape) Close(); };
-        if (SettingsStore.LoadWarning != null) SettingsFeedback.Text = SettingsStore.LoadWarning;
     }
-    private void LoadEditors()
+    private void LoadPreferences()
     {
-        var draft = SettingsStore.Clone(service.Settings); periods = new(draft.Periods); rules = new(draft.Reminders); calendar = draft.Calendar;
-        PeriodsGrid.ItemsSource = periods; RemindersEditor.ItemsSource = rules; IntervalInput.Text = draft.IntervalMinutes.ToString();
-        EnabledInput.IsChecked = draft.Enabled; StartupInput.IsChecked = StartupService.IsEnabled(); QuietInput.IsChecked = draft.FullScreenQuiet;
-        BeijingInput.IsChecked = draft.BeijingTime; ChinaInput.IsChecked = draft.ChinaCalendar; UpdateCalendarInfo();
+        EnabledInput.IsChecked = service.Settings.Enabled; QuietInput.IsChecked = service.Settings.FullScreenQuiet;
+        BeijingInput.IsChecked = service.Settings.BeijingTime; StartupInput.IsChecked = StartupService.IsEnabled();
+        calendar = SettingsStore.Clone(service.Settings).Calendar; CalendarStatus();
     }
-    private void UpdateCalendarInfo()
+    private void CalendarStatus()
     {
-        CalendarInfoText.Text = "已覆盖年份：" + (calendar.Years.Count > 0 ? string.Join("、", calendar.Years.OrderBy(x => x)) : "暂无") + "。\n未覆盖年份按周一至周五运行，并显示日历待更新提示。可导入 JSON 日历补充新年份或公司专属安排。";
+        CalendarInfo.Text = "已覆盖年份：" + (calendar.Years.Count == 0 ? "暂无" : string.Join("、", calendar.Years.OrderBy(x => x))) + "。\n仅对选择「中国工作日」的规则生效；未覆盖年份按周一至周五运行，请导入新日历。";
     }
     public void Refresh()
     {
+        if (!ready) return;
         var now = service.Now; var settings = service.Settings;
-        var active = ScheduleEngine.ActivePeriod(settings, now);
-        StatusText.Text = !settings.Enabled ? "提醒已关闭" : service.Paused ? "已暂停 · 手动恢复后继续" : active != null ? "正在陪伴 · " + active.Name + "工作时段" : "安静等待 · 工作时段外";
-        ClockText.Text = now.ToString("MM 月 dd 日  HH:mm") + (settings.BeijingTime ? "  北京时间" : "  本机时间");
+        int enabled = settings.Reminders.Count(r => r.Enabled);
+        StatusText.Text = !settings.Enabled ? "全部提醒已关闭" : service.Paused ? "已暂停 · 等待手动继续" : $"安静运行 · {enabled} 条提醒已开启";
+        if (settings.Reminders.Any(r => r.Enabled && r.Days == DayPolicy.ChinaWorkdays && r.Mode != ScheduleMode.Once) && !settings.Calendar.Years.Contains(now.Year)) StatusText.Text += " · 工作日历待更新";
+        ClockText.Text = now.ToString("MM/dd  HH:mm") + (settings.BeijingTime ? "  北京时间" : "  本机时间");
+        ActiveCountText.Text = enabled.ToString("00"); TotalCountText.Text = "已开启 / 共 " + settings.Reminders.Count + " 条";
         var next = service.DisplayDue;
-        NextTimeText.Text = !settings.Enabled ? "已关闭" : service.Paused ? "已暂停" : next?.ToString("HH:mm") ?? "暂无";
-        NextDetailText.Text = !settings.Enabled ? "可在偏好设置中开启" : service.Paused ? "点击「继续提醒」恢复" : next == null ? "时段内没有可用的提醒时间" : next.Value.Date == now.Date ? "今天 · 到时间轻轻提醒" : next.Value.ToString("MM 月 dd 日") + " · 下个工作日";
-        IntervalText.Text = settings.IntervalMinutes.ToString();
-        CalendarModeText.Text = settings.ChinaCalendar ? "中国工作日" : "周一至周五";
-        CalendarDetailText.Text = settings.ChinaCalendar && !settings.Calendar.Years.Contains(now.Year) ? now.Year + " 日历待更新" : settings.ChinaCalendar ? "节假日休息 · 调休日提醒" : "周末安静休息";
-        PeriodsSummary.ItemsSource = settings.Periods; PauseButton.Content = service.Paused ? "继续提醒" : "暂停提醒";
-        PauseButton.IsEnabled = settings.Enabled;
+        var nextRule = settings.Reminders.FirstOrDefault(r => next != null && service.NextFor(r.Id) == next);
+        NextReminderText.Text = !settings.Enabled ? "全部关闭" : service.Paused ? "暂停中" : next is { } due ? (due.Date == now.Date ? due.ToString("HH:mm") : due.ToString("MM/dd HH:mm")) + "  ·  " + nextRule?.Name : "暂无待触发提醒";
+        RunStateText.Text = !settings.Enabled ? "已关闭" : service.Paused ? "暂停中" : "轻量运行";
+        PauseButton.Content = service.Paused ? "继续" : "暂停"; PauseButton.IsEnabled = settings.Enabled;
+        string signature = JsonSerializer.Serialize(settings, SettingsCodec.Json) + now.ToString("yyyyMMddHHmm") + service.Paused + next;
+        if (lastUiSignature != signature) { lastUiSignature = signature; RefreshReminders(); }
+    }
+    private void RefreshReminders()
+    {
+        string query = ReminderSearch.Text.Trim(); var now = service.Now;
+        var cards = service.Settings.Reminders.Where(r => query.Length == 0 || (r.Name + r.Category + r.Message).Contains(query, StringComparison.OrdinalIgnoreCase))
+            .Select(r => new ReminderCard(r, service.NextFor(r.Id), now, service.Paused, service.Settings.Enabled)).ToArray();
+        ReminderItems.ItemsSource = cards; EmptyReminders.Visibility = cards.Length == 0 ? Visibility.Visible : Visibility.Collapsed;
+    }
+    private void RefreshTemplates()
+    {
+        string query = TemplateSearch.Text.Trim();
+        var cards = TemplateCatalog.All.Where(t => (category == "全部" || t.Category == category) && (query.Length == 0 || (t.Name + t.Category + t.Description).Contains(query, StringComparison.OrdinalIgnoreCase))).Select(t => new TemplateCard(t)).ToArray();
+        TemplateItems.ItemsSource = cards; EmptyTemplates.Visibility = cards.Length == 0 ? Visibility.Visible : Visibility.Collapsed;
+        foreach (Button button in CategoryFilters.Children) { button.Background = (string)button.Tag == category ? IconArt.Brush("#484064") : IconArt.Brush("#202A40"); }
     }
     public void SelectPage(int index)
     {
-        page = index; OverviewPage.Visibility = index == 0 ? Visibility.Visible : Visibility.Collapsed;
-        RulesPage.Visibility = index == 1 ? Visibility.Visible : Visibility.Collapsed; SettingsPage.Visibility = index == 2 ? Visibility.Visible : Visibility.Collapsed;
-        FooterHint.Visibility = index == 0 ? Visibility.Visible : Visibility.Collapsed;
-        FooterSave.Visibility = index == 0 ? Visibility.Collapsed : Visibility.Visible;
-        FooterSave.Content = index == 1 ? "保存规则  ✓" : "保存偏好  ✓";
-        RulesFeedback.Visibility = index == 1 ? Visibility.Visible : Visibility.Collapsed;
-        SettingsFeedback.Visibility = index == 2 ? Visibility.Visible : Visibility.Collapsed;
-        ContentScroll.ScrollToTop();
-        var buttons = new[] { OverviewNav, RulesNav, SettingsNav };
-        for (int i = 0; i < buttons.Length; i++) { buttons[i].Background = new SolidColorBrush(i == index ? Color.FromRgb(218, 233, 208) : Colors.Transparent); buttons[i].FontWeight = i == index ? FontWeights.SemiBold : FontWeights.Normal; }
+        page = index; RemindersPage.Visibility = index == 0 ? Visibility.Visible : Visibility.Collapsed;
+        TemplatesPage.Visibility = index == 1 ? Visibility.Visible : Visibility.Collapsed; SettingsPage.Visibility = index == 2 ? Visibility.Visible : Visibility.Collapsed;
+        SavePreferences.Visibility = index == 2 ? Visibility.Visible : Visibility.Collapsed; PageScroll.ScrollToTop();
+        var navs = new[] { RemindersNav, TemplatesNav, SettingsNav }; for (int i = 0; i < navs.Length; i++) { navs[i].Background = i == index ? IconArt.Brush("#292744") : Brushes.Transparent; navs[i].Foreground = i == index ? IconArt.Brush("#C0B3FF") : IconArt.Brush("#8293B1"); }
+        RefreshReminders(); RefreshTemplates();
     }
-    private void Overview_Click(object sender, RoutedEventArgs e) => SelectPage(0);
-    private void Rules_Click(object sender, RoutedEventArgs e) => SelectPage(1);
+    private void Reminders_Click(object sender, RoutedEventArgs e) => SelectPage(0);
+    private void Templates_Click(object sender, RoutedEventArgs e) => SelectPage(1);
     private void Settings_Click(object sender, RoutedEventArgs e) => SelectPage(2);
-    private void FooterSave_Click(object sender, RoutedEventArgs e) { if (page == 1) SaveRules_Click(sender, e); else SaveSettings_Click(sender, e); }
-    private void Preview_Click(object sender, RoutedEventArgs e) => service.Preview();
+    private void Search_Changed(object sender, TextChangedEventArgs e) { if (ready) { RefreshReminders(); RefreshTemplates(); } }
+    private void Category_Click(object sender, RoutedEventArgs e) { category = (string)((Button)sender).Tag; RefreshTemplates(); }
     private void Pause_Click(object sender, RoutedEventArgs e) => service.TogglePause();
-    private void Minimize_Click(object sender, RoutedEventArgs e) => WindowState = WindowState.Minimized;
-    private void Maximize_Click(object sender, RoutedEventArgs e) => WindowState = WindowState == WindowState.Maximized ? WindowState.Normal : WindowState.Maximized;
-    private void Close_Click(object sender, RoutedEventArgs e) => Close();
-    private void Title_MouseDown(object sender, MouseButtonEventArgs e) { if (e.ChangedButton == MouseButton.Left) { if (e.ClickCount == 2) Maximize_Click(sender, e); else DragMove(); } }
-    private void AddPeriod_Click(object sender, RoutedEventArgs e) { if (periods.Count < 12) periods.Add(new() { Name = "新时段", Start = "19:00", End = "20:00" }); }
-    private void RemovePeriod_Click(object sender, RoutedEventArgs e) { if (PeriodsGrid.SelectedItem is WorkPeriod p) periods.Remove(p); }
-    private void AddReminder_Click(object sender, RoutedEventArgs e) { if (rules.Count < 20) rules.Add(new() { Title = "新提醒", Message = "起身休息一下吧。" }); }
-    private void RemoveReminder_Click(object sender, RoutedEventArgs e) { if (sender is Button { Tag: ReminderRule r }) rules.Remove(r); }
-    private void SaveRules_Click(object sender, RoutedEventArgs e)
+    private void Preview_Click(object sender, RoutedEventArgs e) => service.Preview();
+    private void PreviewRule_Click(object sender, RoutedEventArgs e) { var rule = RuleFor(sender); if (rule != null) service.Preview(rule); }
+    private ReminderDefinition? RuleFor(object sender) => service.Settings.Reminders.FirstOrDefault(r => r.Id == (string)((FrameworkElement)sender).Tag);
+    private void New_Click(object sender, RoutedEventArgs e) => Edit(new() { Mode = ScheduleMode.FixedTimes, Times = new() { service.Now.AddHours(1).ToString("HH:mm") } }, false);
+    private void UseTemplate_Click(object sender, RoutedEventArgs e)
     {
+        var rule = TemplateCatalog.Create((string)((Button)sender).Tag);
+        if (rule.Mode == ScheduleMode.Once) rule.OnceAt = service.Now.Date.AddDays(1).AddHours(10).ToString("yyyy-MM-dd HH:mm"); Edit(rule, false);
+    }
+    private void EditRule_Click(object sender, RoutedEventArgs e) { var rule = RuleFor(sender); if (rule != null) Edit(rule, true); }
+    private void Edit(ReminderDefinition rule, bool editing)
+    {
+        if (!editing && service.Settings.Reminders.Count >= 60) { Feedback.Text = "最多支持 60 条提醒，请先整理已有规则。"; return; }
+        var editor = new ReminderEditorWindow(rule, service, editing) { Owner = this }; editor.ShowDialog();
+        if (editor.Result == null && !editor.DeleteRequested) return;
         try
         {
-            PeriodsGrid.CommitEdit(DataGridEditingUnit.Cell, true); PeriodsGrid.CommitEdit(DataGridEditingUnit.Row, true);
-            if (!int.TryParse(IntervalInput.Text, out var interval)) throw new ArgumentException("提醒间隔请填写整数。");
-            var value = SettingsStore.Clone(service.Settings); value.Periods = periods.ToList(); value.Reminders = rules.ToList(); value.IntervalMinutes = interval;
-            value.Validate(); var saved = SettingsStore.Clone(value); SettingsStore.Save(saved); service.Apply(saved); RulesFeedback.Text = "已保存 ✓ 新规则从当前时刻开始计算。";
+            var next = SettingsStore.Clone(service.Settings); next.Reminders.RemoveAll(r => r.Id == rule.Id);
+            if (!editor.DeleteRequested)
+            {
+                int index = service.Settings.Reminders.FindIndex(r => r.Id == rule.Id);
+                if (index >= 0) next.Reminders.Insert(Math.Min(index, next.Reminders.Count), editor.Result!); else next.Reminders.Add(editor.Result!);
+            }
+            Save(next); Feedback.Text = editor.DeleteRequested ? "提醒已删除。" : "提醒已保存 ✓ 其他提醒的规则与稍后状态保持不变。"; SelectPage(0);
         }
-        catch (Exception ex) { RulesFeedback.Text = ex.Message; }
+        catch (Exception ex) { Feedback.Text = "保存失败：" + ex.Message; }
     }
+    private void ToggleRule_Click(object sender, RoutedEventArgs e)
+    {
+        try { var next = SettingsStore.Clone(service.Settings); var rule = next.Reminders.First(r => r.Id == (string)((FrameworkElement)sender).Tag); rule.Enabled = !rule.Enabled; Save(next); Feedback.Text = rule.Name + (rule.Enabled ? "已开启。" : "已停用。"); }
+        catch (Exception ex) { Feedback.Text = ex.Message; RefreshReminders(); }
+    }
+    private void Save(AppSettings settings) { settings.Validate(); var copy = SettingsStore.Clone(settings); SettingsStore.Save(copy); service.Apply(copy); lastUiSignature = ""; Refresh(); }
     private void SaveSettings_Click(object sender, RoutedEventArgs e)
     {
         try
         {
-            var value = SettingsStore.Clone(service.Settings); value.Enabled = EnabledInput.IsChecked == true;
-            value.FullScreenQuiet = QuietInput.IsChecked == true; value.BeijingTime = BeijingInput.IsChecked == true; value.ChinaCalendar = ChinaInput.IsChecked == true; value.Calendar = calendar;
-            value.Validate();
-            var originalStartup = StartupService.IsEnabled(); StartupService.SetEnabled(StartupInput.IsChecked == true);
-            try { SettingsStore.Save(value); } catch { StartupService.SetEnabled(originalStartup); throw; }
-            service.Apply(SettingsStore.Clone(value)); SettingsFeedback.Text = "偏好已保存 ✓";
+            var next = SettingsStore.Clone(service.Settings); next.Enabled = EnabledInput.IsChecked == true; next.BeijingTime = BeijingInput.IsChecked == true; next.FullScreenQuiet = QuietInput.IsChecked == true; next.Calendar = calendar; next.Validate();
+            bool before = StartupService.IsEnabled(); StartupService.SetEnabled(StartupInput.IsChecked == true);
+            try { Save(next); } catch { StartupService.SetEnabled(before); throw; } Feedback.Text = "全局偏好已保存 ✓";
         }
-        catch (Exception ex) { SettingsFeedback.Text = "保存失败：" + ex.Message; }
+        catch (Exception ex) { Feedback.Text = "保存失败：" + ex.Message; }
     }
-    private static string ReadJson(string path) { if (new FileInfo(path).Length > 2_000_000) throw new ArgumentException("配置文件不能超过 2 MB。"); return File.ReadAllText(path); }
+    private static string ReadJson(string path) { if (new FileInfo(path).Length > 3_000_000) throw new ArgumentException("配置文件不能超过 3 MB。"); return File.ReadAllText(path); }
     private void ImportCalendar_Click(object sender, RoutedEventArgs e)
     {
-        var dialog = new OpenFileDialog { Filter = "工作日历 (*.json)|*.json", Title = "导入日历：Years / Overrides / Source" };
-        if (dialog.ShowDialog() != true) return;
+        var dialog = new OpenFileDialog { Filter = "工作日历 (*.json)|*.json" }; if (dialog.ShowDialog() != true) return;
         try
         {
             var value = JsonSerializer.Deserialize<CalendarData>(ReadJson(dialog.FileName)) ?? throw new ArgumentException("日历为空。"); value.Validate();
-            foreach (var year in value.Years) { foreach (var key in calendar.Overrides.Keys.Where(k => k.StartsWith(year + "-", StringComparison.Ordinal)).ToList()) calendar.Overrides.Remove(key); }
-            foreach (var entry in value.Overrides) calendar.Overrides[entry.Key] = entry.Value;
-            calendar.Years = calendar.Years.Concat(value.Years).Distinct().OrderBy(x => x).ToList(); calendar.Source = value.Source;
-            UpdateCalendarInfo(); SettingsFeedback.Text = "日历已载入，点击「保存偏好」生效。";
+            foreach (var year in value.Years) foreach (var key in calendar.Overrides.Keys.Where(k => k.StartsWith(year + "-", StringComparison.Ordinal)).ToList()) calendar.Overrides.Remove(key);
+            foreach (var pair in value.Overrides) calendar.Overrides[pair.Key] = pair.Value;
+            calendar.Years = calendar.Years.Concat(value.Years).Distinct().OrderBy(y => y).ToList(); calendar.Source = value.Source; CalendarStatus(); Feedback.Text = "日历已载入，保存偏好后生效。";
         }
-        catch (Exception ex) { SettingsFeedback.Text = "导入失败：" + ex.Message; }
+        catch (Exception ex) { Feedback.Text = "导入失败：" + ex.Message; }
     }
     private void Export_Click(object sender, RoutedEventArgs e)
     {
-        var dialog = new SaveFileDialog { Filter = "DeskTip 配置 (*.json)|*.json", FileName = "DeskTip-config.json" }; if (dialog.ShowDialog() != true) return;
-        try { File.WriteAllText(dialog.FileName, JsonSerializer.Serialize(service.Settings, SettingsStore.Json)); SettingsFeedback.Text = "已导出当前生效配置。"; } catch (Exception ex) { SettingsFeedback.Text = ex.Message; }
+        var dialog = new SaveFileDialog { Filter = "DeskTip 配置 (*.json)|*.json", FileName = "DeskTip-config-v2.json" }; if (dialog.ShowDialog() != true) return;
+        try { File.WriteAllText(dialog.FileName, JsonSerializer.Serialize(service.Settings, SettingsCodec.Json)); Feedback.Text = "已导出全部生效规则和日历。"; } catch (Exception ex) { Feedback.Text = ex.Message; }
     }
     private void Import_Click(object sender, RoutedEventArgs e)
     {
         var dialog = new OpenFileDialog { Filter = "DeskTip 配置 (*.json)|*.json" }; if (dialog.ShowDialog() != true) return;
-        try { var value = JsonSerializer.Deserialize<AppSettings>(ReadJson(dialog.FileName)) ?? throw new ArgumentException("配置为空。"); value.Validate(); SettingsStore.Save(value); service.Apply(value); LoadEditors(); SettingsFeedback.Text = "配置已导入并生效 ✓"; } catch (Exception ex) { SettingsFeedback.Text = "导入失败：" + ex.Message; }
+        try { Save(SettingsCodec.Read(ReadJson(dialog.FileName))); LoadPreferences(); Feedback.Text = "配置已验证并导入 ✓ 支持 v1 自动迁移。"; } catch (Exception ex) { Feedback.Text = "导入失败：" + ex.Message; }
     }
+    private void Close_Click(object sender, RoutedEventArgs e) => Close();
+    private void Minimize_Click(object sender, RoutedEventArgs e) => WindowState = WindowState.Minimized;
+    private void Maximize_Click(object sender, RoutedEventArgs e) => WindowState = WindowState == WindowState.Maximized ? WindowState.Normal : WindowState.Maximized;
+    private void Title_MouseDown(object sender, MouseButtonEventArgs e) { if (e.ChangedButton == MouseButton.Left) { if (e.ClickCount == 2) Maximize_Click(sender, e); else DragMove(); } }
     internal string VerifyDraftValidation()
     {
-        int interval = service.Settings.IntervalMinutes; string originalInput = IntervalInput.Text;
-        string originalName = periods[0].Name; string activeName = service.Settings.Periods[0].Name;
-        string? before = File.Exists(SettingsStore.FilePath) ? File.ReadAllText(SettingsStore.FilePath) : null;
-        periods[0].Name = "验证草稿隔离";
-        if (service.Settings.Periods[0].Name != activeName) throw new Exception("草稿修改影响了生效配置。");
-        IntervalInput.Text = "0"; SaveRules_Click(this, new());
-        if (service.Settings.IntervalMinutes != interval || !RulesFeedback.Text.Contains("1–480")) throw new Exception("错误间隔未被拒绝。");
-        string? after = File.Exists(SettingsStore.FilePath) ? File.ReadAllText(SettingsStore.FilePath) : null;
-        if (before != after) throw new Exception("错误配置写入了磁盘。");
-        periods[0].Name = originalName; IntervalInput.Text = originalInput; RulesFeedback.Text = "";
-        return "PASS draft isolation; invalid UI input rejected; invalid input did not write settings; startup status readable=" + StartupService.IsEnabled();
+        string before = JsonSerializer.Serialize(service.Settings, SettingsCodec.Json);
+        ReminderSearch.Text = "__没有匹配的提醒__"; if (ReminderItems.Items.Count != 0) throw new Exception("提醒搜索失效。"); ReminderSearch.Text = "";
+        category = "健康"; RefreshTemplates(); if (TemplateItems.Items.Count != 4) throw new Exception("模板分类过滤失效。");
+        category = "全部"; TemplateSearch.Text = "备份"; RefreshTemplates(); if (TemplateItems.Items.Count != 1) throw new Exception("模板搜索失效。"); TemplateSearch.Text = ""; RefreshTemplates();
+        var rule = TemplateCatalog.Create("water"); var editor = new ReminderEditorWindow(rule, service, false); string result = editor.VerifyDraftValidation(); editor.Close();
+        if (before != JsonSerializer.Serialize(service.Settings, SettingsCodec.Json)) throw new Exception("界面验证修改了生效规则。"); return result + "; reminder search; template category/search; no data mutation";
     }
 }

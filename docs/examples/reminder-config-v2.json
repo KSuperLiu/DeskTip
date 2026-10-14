@@ -1,0 +1,25 @@
+{
+  "SchemaVersion": 2,
+  "Enabled": true,
+  "BeijingTime": true,
+  "FullScreenQuiet": true,
+  "Reminders": [
+    {
+      "Id": "weekly-project-backup",
+      "Name": "项目备份",
+      "Message": "保存项目文件，确认本周备份已经完成。",
+      "Category": "工作",
+      "IconKey": "folder",
+      "Accent": "#88BDFF",
+      "TemplateKey": "custom",
+      "Enabled": true,
+      "Mode": "FixedTimes",
+      "Days": "SelectedDays",
+      "SelectedDays": ["Friday"],
+      "Times": ["17:45"],
+      "SnoozeMinutes": 10,
+      "ShowCompanion": true,
+      "QuietDuringFullscreen": true
+    }
+  ]
+}

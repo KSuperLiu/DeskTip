@@ -7,12 +7,12 @@
     <ImplicitUsings>disable</ImplicitUsings>
     <UseWPF>true</UseWPF>
     <UseWindowsForms>true</UseWindowsForms>
-    <Version>1.0.0</Version>
+    <Version>2.0.0</Version>
     <ApplicationIcon>Assets\desktip.ico</ApplicationIcon>
     <ApplicationManifest>app.manifest</ApplicationManifest>
   </PropertyGroup>
   <ItemGroup>
-    <Resource Include="Assets\*.png" />
+    <Resource Include="Assets\*.png" Exclude="Assets\mizu.png" />
     <Resource Include="Assets\desktip.ico" />
     <Content Include="Assets\calendar-2026.json" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>

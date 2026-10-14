@@ -44,10 +44,10 @@ public partial class App : Application
     private void CreateTray()
     {
         using var iconStream = GetResourceStream(new Uri("pack://application:,,,/Assets/desktip.ico")).Stream;
-        tray = new Forms.NotifyIcon { Text = "DeskTip · 小憩", Visible = true, Icon = new System.Drawing.Icon(iconStream, 32, 32) };
+        tray = new Forms.NotifyIcon { Text = "DeskTip · 提醒中心", Visible = true, Icon = new System.Drawing.Icon(iconStream, 32, 32) };
         var menu = new Forms.ContextMenuStrip();
         menu.Items.Add("打开 DeskTip", null, (_, _) => ShowSettings());
-        menu.Items.Add("预览休息提醒", null, (_, _) => Reminders.Preview());
+        menu.Items.Add("预览桌面提醒", null, (_, _) => Reminders.Preview());
         var pause = menu.Items.Add("暂停提醒", null, (_, _) => Reminders.TogglePause());
         menu.Opening += (_, _) => pause.Text = Reminders.Paused ? "继续提醒" : "暂停提醒";
         menu.Items.Add(new Forms.ToolStripSeparator()); menu.Items.Add("退出", null, (_, _) => Shutdown());
@@ -75,16 +75,24 @@ public partial class App : Application
             int index = Array.IndexOf(args, "--capture"); string folder = index + 1 < args.Length ? args[index + 1] : "artifacts/previews"; Directory.CreateDirectory(folder);
             ShowSettings(); var window = settingsWindow!; await Task.Delay(700);
             string checks = window.VerifyDraftValidation();
-            for (int p = 0; p < 3; p++) { window.SelectPage(p); await Task.Delay(200); SaveVisual(window, Path.Combine(folder, new[] { "overview.png", "rules.png", "settings.png" }[p])); }
+            for (int p = 0; p < 3; p++) { window.SelectPage(p); await Task.Delay(200); SaveVisual(window, Path.Combine(folder, new[] { "overview.png", "templates.png", "settings.png" }[p])); }
+            var editor = new ReminderEditorWindow(TemplateCatalog.Create("backup"), Reminders, false) { Owner = window };
+            editor.Show(); await Task.Delay(200); SaveVisual(editor, Path.Combine(folder, "editor.png")); editor.Close();
             window.Activate(); await Task.Delay(100);
             bool wasActive = window.IsActive;
             if (!wasActive) throw new Exception("焦点验证需要以正常可见窗口运行 --capture，请勿使用隐藏启动。");
-            var pet = new PetWindow(Reminders.Settings.Reminders[0], true); pet.Show(); await Task.Delay(250); SaveVisual(pet, Path.Combine(folder, "reminder.png"));
+            var sample = Reminders.Settings.Reminders.FirstOrDefault() ?? TemplateCatalog.Create("water");
+            var pet = new PetWindow(new[] { new ReminderOccurrence(sample, Reminders.Now, sample.Message) }, true); pet.Show(); await Task.Delay(250); SaveVisual(pet, Path.Combine(folder, "reminder.png"));
             if (wasActive && !window.IsActive) throw new Exception("提醒抢走了主窗口焦点。");
             pet.Close();
-            var longPet = new PetWindow(new ReminderRule { Title = string.Concat(Enumerable.Repeat("休息一下", 10)), Message = string.Concat(Enumerable.Repeat("起来走走，接水看看远处。", 12)) }, true);
+            var longRule = TemplateCatalog.Create("focus"); longRule.Name = string.Concat(Enumerable.Repeat("重要提醒", 10)); longRule.Message = string.Concat(Enumerable.Repeat("请按照自己的计划开始这件事。", 15));
+            var longPet = new PetWindow(new[] { new ReminderOccurrence(longRule, Reminders.Now, longRule.Message) }, true);
             longPet.Show(); await Task.Delay(200); SaveVisual(longPet, Path.Combine(folder, "reminder-long.png")); longPet.Close();
-            File.WriteAllText(Path.Combine(folder, "capture-ok.txt"), "All WPF views rendered successfully.\n" + checks + "\nPASS reminder does not steal focus."); Shutdown();
+            var batch = new PetWindow(new[] { new ReminderOccurrence(TemplateCatalog.Create("water"), Reminders.Now, "喝水提醒"), new ReminderOccurrence(TemplateCatalog.Create("plan"), Reminders.Now, "规划今天的事项") }, true);
+            batch.Show(); await Task.Delay(200); SaveVisual(batch, Path.Combine(folder, "reminder-batch.png")); batch.Close();
+            var compactRule = TemplateCatalog.Create("read"); compactRule.ShowCompanion = false;
+            var compact = new PetWindow(new[] { new ReminderOccurrence(compactRule, Reminders.Now, compactRule.Message) }, true); compact.Show(); await Task.Delay(200); SaveVisual(compact, Path.Combine(folder, "reminder-compact.png")); compact.Close();
+            File.WriteAllText(Path.Combine(folder, "capture-ok.txt"), "All v2 WPF views rendered successfully.\n" + checks + "\nPASS reminder does not steal focus."); Shutdown();
         }
         catch (Exception ex) { File.WriteAllText(Path.Combine(AppContext.BaseDirectory, "capture-error.txt"), ex.ToString()); Shutdown(1); }
     }

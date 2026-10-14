@@ -4,19 +4,22 @@ $bitmap = New-Object System.Drawing.Bitmap 256,256
 $graphics = [System.Drawing.Graphics]::FromImage($bitmap)
 $graphics.SmoothingMode = [System.Drawing.Drawing2D.SmoothingMode]::AntiAlias
 $graphics.Clear([System.Drawing.Color]::Transparent)
-$green = New-Object System.Drawing.SolidBrush ([System.Drawing.ColorTranslator]::FromHtml('#235B47'))
-$mint = New-Object System.Drawing.SolidBrush ([System.Drawing.ColorTranslator]::FromHtml('#DDF7EA'))
+$green = New-Object System.Drawing.SolidBrush ([System.Drawing.ColorTranslator]::FromHtml('#282441'))
+$mint = New-Object System.Drawing.SolidBrush ([System.Drawing.ColorTranslator]::FromHtml('#C6B9FF'))
 $graphics.FillEllipse($green, 8,8,240,240)
 $shape = New-Object System.Drawing.Drawing2D.GraphicsPath
-$shape.AddBezier(128,48, 119,77, 67,112, 67,152)
-$shape.AddBezier(67,152, 67,222, 189,222, 189,152)
-$shape.AddBezier(189,152, 189,112, 137,77, 128,48)
+$shape.AddBezier(128,60, 104,60, 82,79, 82,107)
+$shape.AddLine(82,107,82,150)
+$shape.AddBezier(82,150, 82,163, 73,170, 64,179)
+$shape.AddLine(64,179,192,179)
+$shape.AddBezier(192,179, 183,170, 174,163, 174,150)
+$shape.AddLine(174,150,174,107)
+$shape.AddBezier(174,107, 174,79, 152,60, 128,60)
 $shape.CloseFigure()
 $graphics.FillPath($mint,$shape)
-$graphics.FillEllipse($green,98,142,10,13)
-$graphics.FillEllipse($green,148,142,10,13)
-$smile = New-Object System.Drawing.Pen ([System.Drawing.ColorTranslator]::FromHtml('#235B47')),5
-$graphics.DrawArc($smile,113,149,30,26,15,150)
+$graphics.FillEllipse($mint,111,187,34,20)
+$smile = New-Object System.Drawing.Pen ([System.Drawing.ColorTranslator]::FromHtml('#C6B9FF')),8
+$graphics.DrawLine($smile,128,51,128,60)
 $stream = New-Object System.IO.MemoryStream
 $bitmap.Save($stream,[System.Drawing.Imaging.ImageFormat]::Png)
 $bytes = $stream.ToArray()

@@ -6,7 +6,7 @@ public static class AssetService
     private static BitmapSource Load()
     {
         var image = new BitmapImage(); image.BeginInit();
-        image.UriSource = new Uri("pack://application:,,,/Assets/mizu.png");
+        image.UriSource = new Uri("pack://application:,,,/Assets/companion.png");
         image.DecodePixelWidth = 384; image.CacheOption = BitmapCacheOption.OnLoad;
         image.EndInit(); image.Freeze(); return image;
     }

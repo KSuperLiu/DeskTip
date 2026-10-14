@@ -1,4 +1,4 @@
-﻿param([string]$Executable = (Join-Path $PSScriptRoot '../release/DeskTip-win-x64/DeskTip.exe'), [int]$Seconds = 45)
+﻿param([string]$Executable = (Join-Path $PSScriptRoot '../release/DeskTip-v2-win-x64/DeskTip.exe'), [int]$Seconds = 45)
 $ErrorActionPreference = 'Stop'
 if (Get-Process DeskTip -ErrorAction SilentlyContinue) { throw '请先退出正在运行的 DeskTip，再执行后台测量。' }
 $process = Start-Process -FilePath $Executable -ArgumentList '--background' -WindowStyle Hidden -PassThru
@@ -23,7 +23,7 @@ try {
     }
     $folder = Join-Path $PSScriptRoot '../artifacts'
     New-Item -ItemType Directory -Force -Path $folder | Out-Null
-    $result | ConvertTo-Json | Set-Content -LiteralPath (Join-Path $folder 'performance.json') -Encoding UTF8
+    $result | ConvertTo-Json | Set-Content -LiteralPath (Join-Path $folder 'performance-v2.json') -Encoding UTF8
     $result | ConvertTo-Json
 } finally {
     Start-Process -FilePath $Executable -ArgumentList '--quit' -WindowStyle Hidden -Wait
