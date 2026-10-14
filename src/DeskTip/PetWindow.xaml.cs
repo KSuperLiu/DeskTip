@@ -6,13 +6,15 @@ using System.Windows.Threading;
 
 namespace DeskTip;
 
-public sealed class NotificationCard
+public sealed class NotificationCard : System.ComponentModel.INotifyPropertyChanged
 {
+    public event System.ComponentModel.PropertyChangedEventHandler? PropertyChanged;
+    public void RefreshTheme() => PropertyChanged?.Invoke(this, new(nameof(Accent)));
     public ReminderOccurrence Occurrence { get; }
     public string Name => Occurrence.Reminder.Name;
     public string Message => Occurrence.Message;
     public Geometry Icon => IconArt.Get(Occurrence.Reminder.IconKey);
-    public Brush Accent => IconArt.Brush(Occurrence.Reminder.Accent);
+    public Brush Accent => ThemeService.Accent(Occurrence.Reminder.Accent);
     public bool CanSnooze { get; }
     public string SnoozeLabel => "稍后 " + Occurrence.Reminder.SnoozeMinutes + " 分钟";
     public NotificationCard(ReminderOccurrence occurrence, bool preview) { Occurrence = occurrence; CanSnooze = !preview && ((App)Application.Current).Reminders.CanSnooze(occurrence.Reminder); }
@@ -28,7 +30,9 @@ public partial class PetWindow : Window
         this.preview = preview; InitializeComponent(); NotificationItems.ItemsSource = cards; Add(occurrences);
         dismiss.Tick += (_, _) => Close(); Loaded += (_, _) => { Position(); dismiss.Start(); }; Closed += (_, _) => dismiss.Stop();
         SizeChanged += (_, _) => { if (IsLoaded) Position(); };
+        ThemeService.Changed += RefreshTheme; Closed += (_, _) => ThemeService.Changed -= RefreshTheme;
     }
+    private void RefreshTheme() { foreach (var card in cards) card.RefreshTheme(); }
     public void Add(IReadOnlyList<ReminderOccurrence> occurrences)
     {
         foreach (var occurrence in occurrences)

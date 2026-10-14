@@ -18,6 +18,7 @@ public sealed class ReminderService : IDisposable
     public DateTime? NextFor(string id) => planner.NextFor(id);
     public bool Paused => planner.Paused;
     public event Action? Changed;
+    public void SetTheme(ThemePreference theme) { Settings.Theme = theme; Changed?.Invoke(); }
     public ReminderService(AppSettings settings)
     {
         planner = new(settings, TimeFor(settings)); timer.Interval = TimeSpan.FromSeconds(15); timer.Tick += Tick; timer.Start();

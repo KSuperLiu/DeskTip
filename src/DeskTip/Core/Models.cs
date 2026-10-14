@@ -100,6 +100,7 @@ public sealed class CalendarData
 public sealed class AppSettings
 {
     public int SchemaVersion { get; set; } = 2;
+    public ThemePreference Theme { get; set; } = ThemePreference.Dark;
     public bool BeijingTime { get; set; } = true;
     public bool FullScreenQuiet { get; set; } = true;
     public bool Enabled { get; set; } = true;
@@ -108,6 +109,7 @@ public sealed class AppSettings
     public void Validate()
     {
         if (SchemaVersion != 2) throw new ArgumentException("此版本暂不支持该配置格式。");
+        if (!Enum.IsDefined(typeof(ThemePreference), Theme)) throw new ArgumentException("主题选项无效。");
         if (Reminders == null || Reminders.Count > 60) throw new ArgumentException("最多支持 60 条独立提醒。");
         if (Reminders.Any(r => r == null) || Reminders.Select(r => r.Id).Distinct().Count() != Reminders.Count) throw new ArgumentException("提醒标识不能重复。");
         foreach (var rule in Reminders) rule.Validate();

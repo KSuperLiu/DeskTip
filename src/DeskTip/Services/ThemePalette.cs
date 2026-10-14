@@ -1,0 +1,115 @@
+namespace DeskTip.Services;
+
+/// <summary>Each token preserves the original dark shade and supplies a light counterpart.</summary>
+public static class ThemePalette
+{
+    public static readonly IReadOnlyDictionary<string, string> Light = Parse();
+    public static string Key(string original) => "Palette." + original.TrimStart('#').ToUpperInvariant();
+    private static Dictionary<string, string> Parse()
+    {
+        const string values = """
+        #0D1322=#EEF0F8
+        #10182A=#FFFFFF
+        #111827=#F6F7FC
+        #151E31=#FFFFFF
+        #17122F=#FFFFFF
+        #171D31=#EEF0F8
+        #172033=#FFFFFF
+        #181F35=#E6E9F5
+        #182136=#EEF1F8
+        #192037=#FFFFFF
+        #192337=#F4F6FB
+        #20253D=#EEEFFC
+        #20283F=#F2F4FA
+        #202A40=#EDF0F8
+        #21213B=#F0EDFA
+        #21223B=#F0EDFA
+        #212D43=#E9EDF7
+        #22223E=#EDEDFB
+        #222C41=#EEF1F8
+        #242C41=#DBDFED
+        #252E44=#EDF0F8
+        #263249=#DFE4EF
+        #272846=#F0EDFF
+        #292744=#E5E0F7
+        #2B354C=#D6DDEC
+        #2C3450=#D6DCED
+        #2F2B53=#DED9F7
+        #303B53=#D4DAE9
+        #303B55=#D4DAE9
+        #333047=#E8E5F6
+        #35304E=#E7E1F8
+        #35405A=#CAD2E5
+        #363752=#D6D8ED
+        #373557=#E7E1F9
+        #39345E=#E4DDF6
+        #3B335F=#E5DEF9
+        #3B385B=#D7D1EE
+        #3E3B68=#E3DEF5
+        #424361=#CBCBE3
+        #484064=#DDD5F2
+        #484264=#E6DFF7
+        #4C486E=#C8C1E2
+        #4D4164=#D9CFF0
+        #52617D=#6C7994
+        #555077=#C0B7DD
+        #585074=#C5BCDF
+        #596C8E=#697C9E
+        #5E7295=#71809C
+        #627897=#6E7C94
+        #64789B=#72819B
+        #655B8C=#C4B8E1
+        #677B9D=#6E7C99
+        #6E83A7=#697B9B
+        #7261C5=#BDB0F0
+        #7688A8=#6F7F9E
+        #7787A6=#6F7C98
+        #7F92B2=#677895
+        #8293B1=#61718D
+        #8491B3=#68769A
+        #8694B1=#67758F
+        #8879E5=#7664CF
+        #8CE0BE=#299570
+        #8D81B9=#7767A0
+        #8FA1C1=#667B9C
+        #8FA2C3=#617897
+        #90A4C7=#5E7294
+        #9195B6=#6D6F92
+        #96A7C8=#627A9A
+        #98A9CA=#5D7393
+        #9BAAC7=#687A97
+        #9DAFCB=#617694
+        #9E91F2=#9583D9
+        #9F96D6=#8B7FBC
+        #A396D0=#7A6B9D
+        #A6A8C7=#6D7095
+        #A99AED=#7866B6
+        #A99CFF=#8770CF
+        #ADA0FF=#7461BE
+        #ADB6CD=#FFFFFF
+        #AEA1FF=#7966D8
+        #AFA2EF=#7865B4
+        #B1A1F3=#7866B2
+        #B2BADD=#53698D
+        #BB8194=#A1536F
+        #BBB1EB=#796BA8
+        #BCAEFA=#7563BC
+        #BDCAEA=#496287
+        #C0B3FF=#6D56B4
+        #C4B8F5=#7864B2
+        #C6C6E7=#60638C
+        #C8D2E8=#3F526F
+        #CDC5F3=#695B9C
+        #CFD6EA=#42516D
+        #D0C8FF=#8671C4
+        #D7E0F5=#374B6D
+        #DAC294=#B28C45
+        #DDE5FA=#334560
+        #DEE5F9=#334A68
+        #E4E9F9=#2F435D
+        #EDF0FC=#1F2B43
+        #F3B0AB=#B65758
+        """;
+        return values.Split('\n', StringSplitOptions.RemoveEmptyEntries).Select(line => line.Trim().Split('=')).ToDictionary(p => p[0], p => p[1]);
+    }
+}

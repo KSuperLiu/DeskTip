@@ -21,6 +21,7 @@ public partial class MainWindow : Window
         HeroImage.Source = AssetService.Pet; ready = true; LoadPreferences(); SelectPage(0); Refresh();
         if (SettingsStore.LoadWarning != null) Feedback.Text = SettingsStore.LoadWarning;
         service.Changed += Refresh; Closed += (_, _) => service.Changed -= Refresh;
+        ThemeService.Changed += RefreshTheme; Closed += (_, _) => ThemeService.Changed -= RefreshTheme;
         KeyDown += (_, e) => { if (e.Key == Key.Escape) Close(); };
     }
     private void LoadPreferences()
@@ -28,6 +29,7 @@ public partial class MainWindow : Window
         EnabledInput.IsChecked = service.Settings.Enabled; QuietInput.IsChecked = service.Settings.FullScreenQuiet;
         BeijingInput.IsChecked = service.Settings.BeijingTime; StartupInput.IsChecked = StartupService.IsEnabled();
         calendar = SettingsStore.Clone(service.Settings).Calendar; CalendarStatus();
+        UpdateThemeChoice();
     }
     private void CalendarStatus()
     {
@@ -62,14 +64,14 @@ public partial class MainWindow : Window
         string query = TemplateSearch.Text.Trim();
         var cards = TemplateCatalog.All.Where(t => (category == "全部" || t.Category == category) && (query.Length == 0 || (t.Name + t.Category + t.Description).Contains(query, StringComparison.OrdinalIgnoreCase))).Select(t => new TemplateCard(t)).ToArray();
         TemplateItems.ItemsSource = cards; EmptyTemplates.Visibility = cards.Length == 0 ? Visibility.Visible : Visibility.Collapsed;
-        foreach (Button button in CategoryFilters.Children) { button.Background = (string)button.Tag == category ? IconArt.Brush("#484064") : IconArt.Brush("#202A40"); }
+        foreach (Button button in CategoryFilters.Children) button.SetResourceReference(BackgroundProperty, ThemePalette.Key((string)button.Tag == category ? "#484064" : "#202A40"));
     }
     public void SelectPage(int index)
     {
         page = index; RemindersPage.Visibility = index == 0 ? Visibility.Visible : Visibility.Collapsed;
         TemplatesPage.Visibility = index == 1 ? Visibility.Visible : Visibility.Collapsed; SettingsPage.Visibility = index == 2 ? Visibility.Visible : Visibility.Collapsed;
         SavePreferences.Visibility = index == 2 ? Visibility.Visible : Visibility.Collapsed; PageScroll.ScrollToTop();
-        var navs = new[] { RemindersNav, TemplatesNav, SettingsNav }; for (int i = 0; i < navs.Length; i++) { navs[i].Background = i == index ? IconArt.Brush("#292744") : Brushes.Transparent; navs[i].Foreground = i == index ? IconArt.Brush("#C0B3FF") : IconArt.Brush("#8293B1"); }
+        var navs = new[] { RemindersNav, TemplatesNav, SettingsNav }; for (int i = 0; i < navs.Length; i++) { if (i == index) navs[i].SetResourceReference(BackgroundProperty, ThemePalette.Key("#292744")); else navs[i].Background = Brushes.Transparent; navs[i].SetResourceReference(ForegroundProperty, ThemePalette.Key(i == index ? "#C0B3FF" : "#8293B1")); }
         RefreshReminders(); RefreshTemplates();
     }
     private void Reminders_Click(object sender, RoutedEventArgs e) => SelectPage(0);
@@ -110,7 +112,31 @@ public partial class MainWindow : Window
         try { var next = SettingsStore.Clone(service.Settings); var rule = next.Reminders.First(r => r.Id == (string)((FrameworkElement)sender).Tag); rule.Enabled = !rule.Enabled; Save(next); Feedback.Text = rule.Name + (rule.Enabled ? "已开启。" : "已停用。"); }
         catch (Exception ex) { Feedback.Text = ex.Message; RefreshReminders(); }
     }
-    private void Save(AppSettings settings) { settings.Validate(); var copy = SettingsStore.Clone(settings); SettingsStore.Save(copy); service.Apply(copy); lastUiSignature = ""; Refresh(); }
+    private void Save(AppSettings settings) { settings.Validate(); var copy = SettingsStore.Clone(settings); SettingsStore.Save(copy); service.Apply(copy); ThemeService.Apply(copy.Theme); lastUiSignature = ""; Refresh(); }
+    private void RefreshTheme() { if (!ready) return; UpdateThemeChoice(); RefreshReminders(); RefreshTemplates(); }
+    private void UpdateThemeChoice()
+    {
+        var buttons = new[] { ThemeDarkButton, ThemeLightButton, ThemeSystemButton };
+        foreach (var button in buttons)
+        {
+            bool selected = Enum.Parse<ThemePreference>((string)button.Tag) == ThemeService.Preference;
+            button.SetResourceReference(BorderBrushProperty, ThemePalette.Key(selected ? "#A99CFF" : "#303B55"));
+            button.SetResourceReference(BackgroundProperty, ThemePalette.Key(selected ? "#292744" : "#202A40"));
+            button.BorderThickness = new Thickness(selected ? 2 : 1);
+            System.Windows.Automation.AutomationProperties.SetItemStatus(button, selected ? "已选择" : "未选择");
+        }
+        ThemeStatus.Text = ThemeService.Preference == ThemePreference.System ? "跟随系统 · 当前" + (ThemeService.Resolved == ThemePreference.Light ? "浅色" : "深色") : (ThemeService.Preference == ThemePreference.Light ? "浅色主题" : "深色主题");
+    }
+    private void ThemeChoice_Click(object sender, RoutedEventArgs e)
+    {
+        try
+        {
+            var theme = Enum.Parse<ThemePreference>((string)((Button)sender).Tag);
+            var next = SettingsStore.Clone(service.Settings); next.Theme = theme; SettingsStore.Save(next);
+            service.SetTheme(theme); ThemeService.Apply(theme); Feedback.Text = "主题已切换并自动保存 ✓";
+        }
+        catch (Exception ex) { Feedback.Text = "主题保存失败：" + ex.Message; }
+    }
     private void SaveSettings_Click(object sender, RoutedEventArgs e)
     {
         try

@@ -37,6 +37,7 @@ public partial class ReminderEditorWindow : Window
         for (int i = 0; i < 7; i++) { var day = (DayOfWeek)((i + 1) % 7); var input = new CheckBox { Content = "周" + "日一二三四五六"[(int)day], IsChecked = draft.SelectedDays.Contains(day), Margin = new Thickness(0, 8, 15, 4) }; dayInputs[day] = input; WeekDaysPanel.Children.Add(input); }
         loaded = true; UpdateModes(); UpdatePreview();
         IconInput.SelectionChanged += (_, _) => UpdatePreview();
+        ThemeService.Changed += UpdatePreview; Closed += (_, _) => ThemeService.Changed -= UpdatePreview;
     }
     private void UpdateModes()
     {
@@ -53,7 +54,7 @@ public partial class ReminderEditorWindow : Window
     {
         PreviewName.Text = string.IsNullOrWhiteSpace(NameInput.Text) ? "你的提醒名称" : NameInput.Text;
         PreviewMessage.Text = string.IsNullOrWhiteSpace(MessageInput.Text) ? "写下到时间后希望看到的内容。" : MessageInput.Text;
-        PreviewIcon.Data = IconArt.Get(icons[Math.Max(0, IconInput.SelectedIndex)].Key); PreviewIcon.Stroke = IconArt.Brush(draft.Accent); PreviewIconTile.Background = IconArt.Tint(draft.Accent);
+        PreviewIcon.Data = IconArt.Get(icons[Math.Max(0, IconInput.SelectedIndex)].Key); PreviewIcon.Stroke = ThemeService.Accent(draft.Accent); PreviewIconTile.Background = IconArt.Tint(draft.Accent);
     }
     private ReminderDefinition Collect()
     {

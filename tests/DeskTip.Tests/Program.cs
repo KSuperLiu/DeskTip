@@ -129,4 +129,15 @@ settings = Default(); rule = settings.Reminders[0];
 bool gridMatches = true;
 foreach (int interval in new[] { 1, 7, 20, 50, 90, 105, 480 }) { rule.IntervalMinutes = interval; foreach (var time in new[] { "00:00", "10:00", "10:49:59", "11:40", "11:45", "13:50", "18:29:59" }) { var reference = ScheduleEngine.Slots(rule, settings.Calendar, D("00:00")).Where(t => t > D(time)).Select(t => (DateTime?)t).FirstOrDefault() ?? ScheduleEngine.Slots(rule, settings.Calendar, D("00:00").AddDays(1)).Select(t => (DateTime?)t).FirstOrDefault(); gridMatches &= ScheduleEngine.Next(rule, settings.Calendar, D(time)) == reference; } }
 Check("optimized schedule matches full slot grid", gridMatches);
+Check("legacy keeps dark appearance", migrated.Theme == ThemePreference.Dark);
+var withoutTheme = System.Text.Json.Nodes.JsonNode.Parse(json)!.AsObject(); withoutTheme.Remove("Theme");
+Check("config without theme keeps dark", SettingsCodec.Read(withoutTheme.ToJsonString()).Theme == ThemePreference.Dark);
+foreach (var theme in Enum.GetValues<ThemePreference>()) { settings = Default(); settings.Theme = theme; Check("theme config roundtrip " + theme, SettingsCodec.Read(JsonSerializer.Serialize(settings, SettingsCodec.Json)).Theme == theme); }
+settings = Default(); settings.Theme = (ThemePreference)99; Reject("invalid theme rejected", settings.Validate);
+Reject("invalid persisted theme rejected", () => SettingsCodec.Read(json.Replace("\"Theme\": \"Dark\"", "\"Theme\": \"Invalid\"")));
+Check("system follows light", ThemeRules.Resolve(ThemePreference.System, true) == ThemePreference.Light);
+Check("system follows dark", ThemeRules.Resolve(ThemePreference.System, false) == ThemePreference.Dark);
+Check("explicit theme independent of system", ThemeRules.Resolve(ThemePreference.Dark, true) == ThemePreference.Dark && ThemeRules.Resolve(ThemePreference.Light, false) == ThemePreference.Light);
+settings = Default(); rule = settings.Reminders[0]; planner = new(settings, D("10:49")); planner.Advance(D("10:50"), false); planner.Snooze(rule.Id, D("10:50")); changed = SettingsCodec.Clone(settings); changed.Theme = ThemePreference.Light; planner.Apply(changed, D("10:51"));
+Check("theme preserves snooze", planner.NextFor(rule.Id) == D("10:55")); planner.TogglePause(D("10:51")); changed = SettingsCodec.Clone(changed); changed.Theme = ThemePreference.System; planner.Apply(changed, D("10:52")); Check("theme preserves pause", planner.Paused);
 Console.WriteLine($"{passed} checks passed.");

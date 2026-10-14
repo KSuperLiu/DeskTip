@@ -38,7 +38,7 @@ public sealed class ReminderCard
     public string Window => Rule.WindowLabel;
     public string Next { get; }
     public Geometry Icon => IconArt.Get(Rule.IconKey);
-    public Brush Accent => IconArt.Brush(Rule.Accent);
+    public Brush Accent => ThemeService.Accent(Rule.Accent);
     public Brush Tint => IconArt.Tint(Rule.Accent);
     public ReminderCard(ReminderDefinition rule, DateTime? next, DateTime now, bool paused, bool globallyEnabled)
     {
@@ -55,7 +55,7 @@ public sealed class TemplateCard
     public string Category => Template.Category;
     public string Tag => Template.Tag;
     public Geometry Icon => IconArt.Get(Template.IconKey);
-    public Brush Accent => IconArt.Brush(Template.Accent);
+    public Brush Accent => ThemeService.Accent(Template.Accent);
     public Brush Tint => IconArt.Tint(Template.Accent);
     public TemplateCard(ReminderTemplate template) { Template = template; }
 }

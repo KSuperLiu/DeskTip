@@ -36,10 +36,11 @@ public partial class App : Application
             Directory.CreateDirectory(SettingsStore.Folder); File.AppendAllText(Path.Combine(SettingsStore.Folder, "error.log"), DateTime.Now + " " + args.Exception + Environment.NewLine);
             MessageBox.Show("操作未完成：" + args.Exception.Message, "DeskTip", MessageBoxButton.OK, MessageBoxImage.Warning); args.Handled = true;
         };
-        Reminders = new ReminderService(SettingsStore.Load());
+        var settings = SettingsStore.Load(); ThemeService.Initialize(settings.Theme);
+        Reminders = new ReminderService(settings);
         CreateTray();
         if (e.Args.Contains("--capture")) { _ = Capture(e.Args); return; }
-        if (!e.Args.Contains("--background")) ShowSettings();
+        if (!e.Args.Contains("--background")) { ShowSettings(); if (e.Args.Contains("--settings")) settingsWindow!.SelectPage(2); }
     }
     private void CreateTray()
     {
@@ -92,12 +93,42 @@ public partial class App : Application
             batch.Show(); await Task.Delay(200); SaveVisual(batch, Path.Combine(folder, "reminder-batch.png")); batch.Close();
             var compactRule = TemplateCatalog.Create("read"); compactRule.ShowCompanion = false;
             var compact = new PetWindow(new[] { new ReminderOccurrence(compactRule, Reminders.Now, compactRule.Message) }, true); compact.Show(); await Task.Delay(200); SaveVisual(compact, Path.Combine(folder, "reminder-compact.png")); compact.Close();
-            File.WriteAllText(Path.Combine(folder, "capture-ok.txt"), "All v2 WPF views rendered successfully.\n" + checks + "\nPASS reminder does not steal focus."); Shutdown();
+            checks += await CaptureThemes(window, folder);
+            File.WriteAllText(Path.Combine(folder, "capture-ok.txt"), "All WPF views rendered successfully.\n" + checks + "\nPASS reminder does not steal focus."); Shutdown();
         }
         catch (Exception ex) { File.WriteAllText(Path.Combine(AppContext.BaseDirectory, "capture-error.txt"), ex.ToString()); Shutdown(1); }
     }
+    private async Task<string> CaptureThemes(MainWindow window, string folder)
+    {
+        var original = ThemeService.Preference;
+        string before = System.Text.Json.JsonSerializer.Serialize(Reminders.Settings, SettingsCodec.Json);
+        DateTime? due = Reminders.DisplayDue;
+        var editor = new ReminderEditorWindow(TemplateCatalog.Create("water"), Reminders, false) { Owner = window };
+        var rule = TemplateCatalog.Create("water");
+        var pet = new PetWindow(new[] { new ReminderOccurrence(rule, Reminders.Now, rule.Message) }, true);
+        editor.Show(); pet.Show();
+        try
+        {
+            foreach (var theme in new[] { ThemePreference.Dark, ThemePreference.Light })
+            {
+                ThemeService.Apply(theme); await Task.Delay(200);
+                var expected = (Color)ColorConverter.ConvertFromString(theme == ThemePreference.Dark ? "#111827" : "#F6F7FC");
+                if (((SolidColorBrush)window.Background).Color != expected || ((SolidColorBrush)editor.Background).Color != expected) throw new Exception("现有窗口没有跟随主题更新。");
+                if (!pet.IsVisible) throw new Exception("切换主题关闭了提醒。");
+                string suffix = theme.ToString().ToLowerInvariant();
+                for (int p = 0; p < 3; p++) { window.SelectPage(p); await Task.Delay(100); SaveVisual(window, Path.Combine(folder, new[] { "overview-", "templates-", "settings-" }[p] + suffix + ".png")); }
+                SaveVisual(editor, Path.Combine(folder, "editor-" + suffix + ".png")); SaveVisual(pet, Path.Combine(folder, "reminder-" + suffix + ".png"));
+            }
+            ThemeService.Apply(ThemePreference.System);
+            if (ThemeService.Resolved != ThemeRules.Resolve(ThemePreference.System, ThemeService.WindowsLight())) throw new Exception("跟随系统主题解析错误。");
+            if (before != System.Text.Json.JsonSerializer.Serialize(Reminders.Settings, SettingsCodec.Json) || due != Reminders.DisplayDue) throw new Exception("主题预览改变了规则或计时。");
+            return "; PASS live dark/light windows; system theme resolution; no config/timer mutation";
+        }
+        finally { editor.Close(); pet.Close(); ThemeService.Apply(original); }
+    }
     protected override void OnExit(ExitEventArgs e)
     {
+        ThemeService.Dispose();
         showWait?.Unregister(null); quitWait?.Unregister(null); showSignal?.Dispose(); quitSignal?.Dispose();
         Reminders?.Dispose(); if (tray != null) { tray.Visible = false; tray.ContextMenuStrip?.Dispose(); tray.Icon?.Dispose(); tray.Dispose(); }
         instance?.Dispose(); base.OnExit(e);
