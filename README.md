@@ -79,7 +79,7 @@
 
 此片段仅展示格式；完整 2026 数据随程序附带。新年度安排发布后需导入更新，应用不会自动联网更新。
 
-开机启动默认关闭，勾选并保存后通过当前用户 `HKCU\Software\Microsoft\Windows\CurrentVersion\Run` 的 `DeskTip` 项静默启动到托盘。无需管理员权限；移动文件夹后需重新保存启动设置。
+开机启动默认关闭，勾选或取消后立即保存，无需点击「保存偏好」，界面显示登记状态和程序路径。通过当前用户 `HKCU\Software\Microsoft\Windows\CurrentVersion\Run` 的 `DeskTip` 项静默启动到托盘。无需管理员权限；移动文件夹后需在新位置重新勾选启动设置。登录 Windows 后静默进入托盘，可双击托盘图标打开。
 
 v2 配置保存在 `%LOCALAPPDATA%\DeskTip\settings-v2.json`，原子替换写入并保存上一版 `.bak`。首次运行在没有 v2 文件时读取 `settings.json`，将旧版开启的文案迁移为一条独立轮换提醒，将旧版关闭的文案保留为停用规则。保留原工作时段、间隔、时区和日历；原文件保留。
 

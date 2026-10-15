@@ -27,7 +27,7 @@ public partial class MainWindow : Window
     private void LoadPreferences()
     {
         EnabledInput.IsChecked = service.Settings.Enabled; QuietInput.IsChecked = service.Settings.FullScreenQuiet;
-        BeijingInput.IsChecked = service.Settings.BeijingTime; StartupInput.IsChecked = StartupService.IsEnabled();
+        BeijingInput.IsChecked = service.Settings.BeijingTime; RefreshStartupState();
         calendar = SettingsStore.Clone(service.Settings).Calendar; CalendarStatus();
         UpdateThemeChoice();
     }
@@ -137,13 +137,26 @@ public partial class MainWindow : Window
         }
         catch (Exception ex) { Feedback.Text = "主题保存失败：" + ex.Message; }
     }
+    private void RefreshStartupState()
+    {
+        try
+        {
+            bool enabled = StartupService.IsEnabled(); StartupInput.IsChecked = enabled;
+            StartupStatus.Text = enabled ? "已登记开机启动 · 当前程序：" + StartupService.Executable : StartupService.RegisteredCommand != null ? "启动项指向其他位置，请重新勾选以更新为当前程序。" : "未启用 · 勾选后立即保存，无需再点击「保存偏好」。";
+        }
+        catch (Exception ex) { StartupStatus.Text = "无法读取启动状态：" + ex.Message; }
+    }
+    private void Startup_Click(object sender, RoutedEventArgs e)
+    {
+        try { StartupService.SetEnabled(StartupInput.IsChecked == true); RefreshStartupState(); Feedback.Text = StartupInput.IsChecked == true ? "开机启动已登记 ✓ 登录 Windows 后静默进入托盘。" : "开机启动已关闭并保存。"; }
+        catch (Exception ex) { RefreshStartupState(); Feedback.Text = "开机启动保存失败：" + ex.Message; }
+    }
     private void SaveSettings_Click(object sender, RoutedEventArgs e)
     {
         try
         {
             var next = SettingsStore.Clone(service.Settings); next.Enabled = EnabledInput.IsChecked == true; next.BeijingTime = BeijingInput.IsChecked == true; next.FullScreenQuiet = QuietInput.IsChecked == true; next.Calendar = calendar; next.Validate();
-            bool before = StartupService.IsEnabled(); StartupService.SetEnabled(StartupInput.IsChecked == true);
-            try { Save(next); } catch { StartupService.SetEnabled(before); throw; } Feedback.Text = "全局偏好已保存 ✓";
+            Save(next); Feedback.Text = "全局偏好已保存 ✓";
         }
         catch (Exception ex) { Feedback.Text = "保存失败：" + ex.Message; }
     }
